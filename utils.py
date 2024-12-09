@@ -1,24 +1,31 @@
-import random
-from typing import List
+def init_board(size):
+    return [[None for _ in range(size)] for _ in range(size)]
 
-def random_position() -> List[int]:
-    """Generate a random position for the food within the game boundaries."""
-    return [random.randint(0, 79) * 10, random.randint(0, 59) * 10]
+def is_valid_move(board, x, y):
+    return 0 <= x < len(board) and 0 <= y < len(board[0]) and board[x][y] is None
 
-def check_collision(pos1: List[int], pos2: List[int]) -> bool:
-    """Check if two positions are colliding.
+def make_move(board, x, y, color, move_history):
+    if is_valid_move(board, x, y):
+        board[x][y] = color
+        move_history.append((x, y, color))
 
-    Args:
-        pos1 (List[int]): The first position.
-        pos2 (List[int]): The second position.
+def undo_move(board, move_history):
+    if move_history:
+        x, y, color = move_history.pop()
+        board[x][y] = None
 
-    Returns:
-        bool: True if the positions collide, False otherwise.
-    """
-    # Validate inputs
-    if not (isinstance(pos1, list) and isinstance(pos2, list)):
-        raise ValueError("Both positions must be lists.")
-    if len(pos1) != 2 or len(pos2) != 2:
-        raise ValueError("Both positions must be lists of length 2.")
+def check_victory(board, x, y, color):
+    def count_stones(dx, dy):
+        count = 0
+        nx, ny = x, y
+        while 0 <= nx < len(board) and 0 <= ny < len(board[0]) and board[nx][ny] == color:
+            count += 1
+            nx += dx
+            ny += dy
+        return count - 1  # subtract 1 to avoid counting the stone at (x, y) twice
 
-    return pos1 == pos2
+    directions = [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, 1), (-1, 1), (1, -1)]
+    for dx, dy in directions:
+        if count_stones(dx, dy) + count_stones(-dx, -dy) >= 4:
+            return True
+    return False
