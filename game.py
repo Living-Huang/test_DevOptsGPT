@@ -1,10 +1,7 @@
 import pygame
-from utils import random_position, check_collision
+import random
 import time
-
-MOVE_STEP = 10
-MAX_SPEED = 20
-LEVEL_UP_THRESHOLD = 50  # Score threshold to increase level
+from utils import random_food_position, draw_text, play_sound_effect
 
 class Snake:
     def __init__(self, speed=2):
@@ -46,73 +43,90 @@ class Snake:
 
 class Food:
     def __init__(self):
-        self.position = random_position()
+        self.position = random_food_position()
         self.is_eaten = False
 
     def respawn(self):
-        self.position = random_position()
+        self.position = random_food_position()
         self.is_eaten = False
 
-class Game:
-    def __init__(self, screen):
-        self.screen = screen
+class SnakeGame:
+    def __init__(self, window, eat_sound, game_over_sound):
+        self.window = window
+        self.eat_sound = eat_sound
+        self.game_over_sound = game_over_sound
+        self.score = 0
+        self.high_score = 0
+        self.start_new_game()
+
+    def start_new_game(self):
         self.snake = Snake()
         self.food = Food()
-        self.clock = pygame.time.Clock()
-        self.level = 1
-        self.food_timer = 5  # Timer for food appearance
-        self.last_food_time = time.time()
+        self.direction = pygame.K_RIGHT
+        self.game_over = False
+        self.choose_difficulty()
 
-    def run(self):
-        while True:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    exit()
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_UP and self.snake.direction != 'DOWN':
-                        self.snake.direction = 'UP'
-                    if event.key == pygame.K_DOWN and self.snake.direction != 'UP':
-                        self.snake.direction = 'DOWN'
-                    if event.key == pygame.K_LEFT and self.snake.direction != 'RIGHT':
-                        self.snake.direction = 'LEFT'
-                    if event.key == pygame.K_RIGHT and self.snake.direction != 'LEFT':
-                        self.snake.direction = 'RIGHT'
+    def choose_difficulty(self):
+        level = input('Choose difficulty (easy, medium, hard): ')
+        if level == 'easy':
+            self.speed = 150
+        elif level == 'medium':
+            self.speed = 100
+        elif level == 'hard':
+            self.speed = 50
+        else:
+            self.speed = 100 
 
-            self.snake.move()
+    def update(self):
+        self.snake.move()
+        if check_collision(self.snake.position, self.food.position):
+            self.snake.grow()
+            self.food.respawn()
+            play_sound_effect(self.eat_sound)
 
-            if check_collision(self.snake.position, self.food.position):
-                self.snake.grow()
-                self.food.respawn()
-                self.audio_feedback()
+        if self.snake.check_collision():
+            self.game_over = True
+            play_sound_effect(self.game_over_sound)
+            if self.snake.score > self.high_score:
+                self.high_score = self.snake.score
+                time.sleep(2)
+                pygame.quit()
+                exit()
 
-            if self.snake.check_collision():
-                self.game_over()
-
-            self.screen.fill((0, 0, 0))  
-            self.draw_elements()
-            self.clock.tick(min(10 + self.snake.score // 10, MAX_SPEED))  # Cap the speed
-
-    def audio_feedback(self):
-        eat_sound = pygame.mixer.Sound("eat_sound.wav")
-        eat_sound.play()
-
-    def draw_elements(self):
+    def draw(self):
+        self.window.fill((0, 0, 0))
         for segment in self.snake.body:
-            pygame.draw.rect(self.screen, (0, 255, 0), pygame.Rect(segment[0], segment[1], MOVE_STEP, MOVE_STEP))
-        pygame.draw.rect(self.screen, (255, 0, 0), pygame.Rect(self.food.position[0], self.food.position[1], MOVE_STEP, MOVE_STEP))
+            pygame.draw.rect(self.window, (0, 255, 0), (segment[0], segment[1], MOVE_STEP, MOVE_STEP))
+        pygame.draw.rect(self.window, (255, 0, 0), (self.food.position[0], self.food.position[1], MOVE_STEP, MOVE_STEP))
+        draw_text(self.window, f'Score: {self.score}', 10, 10)
+        draw_text(self.window, f'High Score: {self.high_score}', 10, 30)
         pygame.display.flip()
 
-    def game_over(self):
-        font = pygame.font.SysFont('arial', 36)
-        text = font.render("Game Over! Your score: {}".format(self.snake.score), True, (255, 255, 255))
-        self.screen.blit(text, (200, 250))
-        pygame.display.flip()
-        time.sleep(2)  # Give time to read message
-        pygame.quit()
-        exit()
+    def handle_keypress(self, key):
+        if key in [pygame.K_UP, pygame.K_DOWN, pygame.K_LEFT, pygame.K_RIGHT]:
+            self.direction = key
+
+MOVE_STEP = 10
+MAX_SPEED = 20
+LEVEL_UP_THRESHOLD = 50
 
 pygame.init()
 screen = pygame.display.set_mode((800, 600))
-game = Game(screen)
-game.run()
+eat_sound = pygame.mixer.Sound('eat_sound.wav')
+game_over_sound = pygame.mixer.Sound('game_over.wav')
+game = SnakeGame(screen, eat_sound, game_over_sound)
+
+def game_loop():
+    clock = pygame.time.Clock()
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+            elif event.type == pygame.KEYDOWN:
+                game.handle_keypress(event.key)
+        game.update()
+        game.draw()
+        clock.tick(game.speed)
+
+game_loop()
