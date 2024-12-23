@@ -1,132 +1,161 @@
 import pygame
 import random
-import time
-from utils import random_food_position, draw_text, play_sound_effect
+from utils import initialize_settings, print_score, draw_block, check_collision, clear_full_lines
 
-class Snake:
-    def __init__(self, speed=2):
-        self.position = [100, 50]
-        self.body = [[100, 50], [90, 50], [80, 50]]
-        self.direction = 'RIGHT'
-        self.speed = speed
-        self.score = 0
-        self.grow_flag = False
+class Block:
+    def __init__(self, shape, color):
+        self.shape = shape
+        self.color = color
+        self.rotation = 0  # Shape rotation index
+        self.x = 3
+        self.y = 0
 
-    def move(self):
-        if self.direction == 'UP':
-            new_head = [self.position[0], self.position[1] - MOVE_STEP]
-        elif self.direction == 'DOWN':
-            new_head = [self.position[0], self.position[1] + MOVE_STEP]
-        elif self.direction == 'LEFT':
-            new_head = [self.position[0] - MOVE_STEP, self.position[1]]
-        elif self.direction == 'RIGHT':
-            new_head = [self.position[0] + MOVE_STEP, self.position[1]]
+    def move(self, dx, dy):
+        self.x += dx
+        self.y += dy
 
-        self.body.insert(0, new_head)
-        if self.grow_flag:
-            self.score += 10
-            self.grow_flag = False
-        else:
-            self.body.pop()
+    def rotate(self):
+        self.rotation = (self.rotation + 1) % len(self.shape)
 
-        self.position = new_head
+    def unrotate(self):
+        self.rotation = (self.rotation - 1) % len(self.shape)
 
-    def grow(self):
-        self.grow_flag = True
+    def get_cells(self):
+        cells = []
+        for index in self.shape[self.rotation]:
+            x = self.x + (index % 4)
+            y = self.y + (index // 4)
+            cells.append((x, y))
+        return cells
 
-    def check_collision(self):
-        if (self.position[0] < 0 or self.position[0] >= 800 or 
-            self.position[1] < 0 or self.position[1] >= 600 or 
-            self.position in self.body[1:]):
-            return True
-        return False
-
-class Food:
+class Tetris:
     def __init__(self):
-        self.position = random_food_position()
-        self.is_eaten = False
-
-    def respawn(self):
-        self.position = random_food_position()
-        self.is_eaten = False
-
-class SnakeGame:
-    def __init__(self, window, eat_sound, game_over_sound):
-        self.window = window
-        self.eat_sound = eat_sound
-        self.game_over_sound = game_over_sound
+        self.settings = initialize_settings()
         self.score = 0
-        self.high_score = 0
-        self.start_new_game()
+        self.level = 1
+        self.paused = False
+        self.game_over_flag = False
+        self.blocks = []
+        self.current_block = self.generate_new_block()
 
-    def start_new_game(self):
-        self.snake = Snake()
-        self.food = Food()
-        self.direction = pygame.K_RIGHT
-        self.game_over = False
-        self.choose_difficulty()
+    def generate_new_block(self):
+        shapes = [
+            [[1, 5, 9, 13], [4, 5, 6, 7]],  # I-shape
+            [[1, 2, 5, 6]],                 # O-shape
+            [[1, 2, 6, 10], [4, 5, 6, 2]],  # T-shape
+            [[1, 2, 6, 5], [0, 4, 5, 6]],   # S-shape
+            [[1, 5, 6, 7], [6, 5, 4, 0]]    # Z-shape
+        ]
+        return Block(random.choice(shapes), (255, 255, 255))
 
-    def choose_difficulty(self):
-        level = input('Choose difficulty (easy, medium, hard): ')
-        if level == 'easy':
-            self.speed = 150
-        elif level == 'medium':
-            self.speed = 100
-        elif level == 'hard':
-            self.speed = 50
-        else:
-            self.speed = 100 
+    def move_block_left(self):
+        self.current_block.move(-1, 0)
+        if check_collision(self.blocks, self.current_block):
+            self.current_block.move(1, 0)
+
+    def move_block_right(self):
+        self.current_block.move(1, 0)
+        if check_collision(self.blocks, self.current_block):
+            self.current_block.move(-1, 0)
+
+    def rotate_block(self):
+        self.current_block.rotate()
+        if check_collision(self.blocks, self.current_block):
+            self.current_block.unrotate()
+
+    def move_block_down(self):
+        self.current_block.move(0, 1)
+        if check_collision(self.blocks, self.current_block):
+            self.current_block.move(0, -1)
+            self.blocks.append(self.current_block)
+            lines_cleared = clear_full_lines(self.blocks)
+            self.update_score_and_level(lines_cleared)
+            self.current_block = self.generate_new_block()
+            if check_collision(self.blocks, self.current_block):
+                self.set_game_over()
+
+    def drop_block(self):
+        while not check_collision(self.blocks, self.current_block):
+            self.current_block.move(0, 1)
+        self.current_block.move(0, -1)
+        self.blocks.append(self.current_block)
+        lines_cleared = clear_full_lines(self.blocks)
+        self.update_score_and_level(lines_cleared)
+        self.current_block = self.generate_new_block()
+        if check_collision(self.blocks, self.current_block):
+            self.set_game_over()
+
+    def pause(self):
+        self.paused = not self.paused
+
+    def restart(self):
+        self.__init__()
 
     def update(self):
-        self.snake.move()
-        if check_collision(self.snake.position, self.food.position):
-            self.snake.grow()
-            self.food.respawn()
-            play_sound_effect(self.eat_sound)
+        if self.paused or self.game_over_flag:
+            return
+        if not check_collision(self.blocks, self.current_block):
+            self.current_block.move(0, 1)
+        else:
+            self.current_block.move(0, -1)
+            self.blocks.append(self.current_block)
+            lines_cleared = clear_full_lines(self.blocks)
+            self.update_score_and_level(lines_cleared)
+            self.current_block = self.generate_new_block()
+            if check_collision(self.blocks, self.current_block):
+                self.set_game_over()
 
-        if self.snake.check_collision():
-            self.game_over = True
-            play_sound_effect(self.game_over_sound)
-            if self.snake.score > self.high_score:
-                self.high_score = self.snake.score
-                time.sleep(2)
-                pygame.quit()
-                exit()
+    def draw(self, window):
+        for block in self.blocks:
+            draw_block(window, block)
+        draw_block(window, self.current_block)
+        print_score(window, self.score, self.level)
 
-    def draw(self):
-        self.window.fill((0, 0, 0))
-        for segment in self.snake.body:
-            pygame.draw.rect(self.window, (0, 255, 0), (segment[0], segment[1], MOVE_STEP, MOVE_STEP))
-        pygame.draw.rect(self.window, (255, 0, 0), (self.food.position[0], self.food.position[1], MOVE_STEP, MOVE_STEP))
-        draw_text(self.window, f'Score: {self.score}', 10, 10)
-        draw_text(self.window, f'High Score: {self.high_score}', 10, 30)
-        pygame.display.flip()
+    def set_game_over(self):
+        self.game_over_flag = True
 
-    def handle_keypress(self, key):
-        if key in [pygame.K_UP, pygame.K_DOWN, pygame.K_LEFT, pygame.K_RIGHT]:
-            self.direction = key
+    def update_score_and_level(self, lines_cleared):
+        line_points = {1: 40, 2: 100, 3: 300, 4: 1200}
+        self.score += line_points.get(lines_cleared, 0) * self.level
+        if self.score >= self.level * 1000:
+            self.level += 1
 
-MOVE_STEP = 10
-MAX_SPEED = 20
-LEVEL_UP_THRESHOLD = 50
+# Assumed code for utils.py for testing purposes
+# This should be in a `utils.py` file
+def initialize_settings():
+    return {
+        'width': 300,
+        'height': 600,
+        'block_size': 30,
+        'fps': 30
+    }
 
-pygame.init()
-screen = pygame.display.set_mode((800, 600))
-eat_sound = pygame.mixer.Sound('eat_sound.wav')
-game_over_sound = pygame.mixer.Sound('game_over.wav')
-game = SnakeGame(screen, eat_sound, game_over_sound)
+def print_score(window, score, level):
+    font = pygame.font.Font(None, 36)
+    text = f'Score: {score}   Level: {level}'
+    label = font.render(text, 1, (255, 255, 255))
+    window.blit(label, (10, 10))
 
-def game_loop():
-    clock = pygame.time.Clock()
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                exit()
-            elif event.type == pygame.KEYDOWN:
-                game.handle_keypress(event.key)
-        game.update()
-        game.draw()
-        clock.tick(game.speed)
+def draw_block(window, block):
+    for (x, y) in block.get_cells():
+        pygame.draw.rect(window, block.color,
+                         (x * 30, y * 30, 30, 30))
 
-game_loop()
+def check_collision(blocks, current_block):
+    for (x, y) in current_block.get_cells():
+        if x < 0 or x >= 10 or y >= 20:
+            return True
+        if any((x == bx and y == by) for (bx, by) in b.get_cells() for b in blocks):
+            return True
+    return False
+
+def clear_full_lines(blocks):
+    full_lines = [y for y in range(20) if all((x, y) in [(cx, cy) for c in blocks for (cx, cy) in c.get_cells()] for x in range(10))]
+    new_blocks = []
+    for block in blocks:
+        cells = [(x, y) for (x, y) in block.get_cells() if y not in full_lines]
+        if cells:
+            block.shape = [[x + y * 4 for (x, y) in cells]] * 4
+            new_blocks.append(block)
+    blocks[:] = new_blocks
+    return len(full_lines)

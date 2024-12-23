@@ -1,63 +1,57 @@
 import pygame
-import os
-from game import SnakeGame
+from game import Tetris
 
-def main():
-    pygame.init()
-    window_size = (800, 600)
-    screen = pygame.display.set_mode(window_size)
-    pygame.display.set_caption("贪吃蛇游戏")
-    
-    music_file = "background_music.mp3"
+# Initialize the pygame library
+pygame.init()
 
+# Set up the game window
+WINDOW_WIDTH, WINDOW_HEIGHT = 800, 600
+window = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+pygame.display.set_caption("Tetris")
+
+# Create the game instance
+game = Tetris()
+
+# Game loop
+running = True
+clock = pygame.time.Clock()
+while running:
     try:
-        if not os.path.isfile(music_file):
-            raise FileNotFoundError(f"Music file '{music_file}' not found.")
-
-        pygame.mixer.music.load(music_file)
-        pygame.mixer.music.play(-1)
-    
-    except pygame.error as e:
-        print(f"Error loading music: {e}")
-        return
-    except FileNotFoundError as e:
-        print(e)
-        return
-    
-    # 加载音效
-    eat_sound = pygame.mixer.Sound('eat.wav')
-    game_over_sound = pygame.mixer.Sound('game_over.wav')
-    
-    # 创建游戏实例
-    game = SnakeGame(screen, eat_sound, game_over_sound)
-    
-    running = True
-    paused = False
-    
-    while running:
+        # Handle events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_p:
-                    paused = not paused
-                elif paused:
-                    if event.key == pygame.K_r:
-                        game.start_new_game()
-                        paused = False
-                else:
-                    game.handle_keypress(event.key)
-        
-        if not paused:
-            game.update()
-            if game.game_over:
-                paused = True
-        
-        game.draw()
+                if event.key == pygame.K_LEFT:
+                    game.move_block_left()
+                elif event.key == pygame.K_RIGHT:
+                    game.move_block_right()
+                elif event.key == pygame.K_UP:
+                    game.rotate_block()
+                elif event.key == pygame.K_DOWN:
+                    game.move_block_down()
+                elif event.key == pygame.K_SPACE:
+                    game.drop_block()
+                elif event.key == pygame.K_p:
+                    game.pause()
+                elif event.key == pygame.K_r:
+                    game.restart()
+
+        # Update game
+        game.update()
+
+        # Draw game
+        window.fill((0, 0, 0))  # Clear screen with black
+        game.draw(window)
         pygame.display.flip()
-        pygame.time.delay(game.speed)
 
-    pygame.quit()
+        # Cap the frame rate
+        clock.tick(60)
 
-if __name__ == "__main__":
-    main()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        running = False
+
+# Quit pygame
+pygame.quit()
+
